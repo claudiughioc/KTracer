@@ -9,9 +9,33 @@ MODULE_DESCRIPTION("Kprobe based tracer");
 MODULE_AUTHOR("Claudiu Ghioc");
 MODULE_LICENSE("GPL");
 
+/* open device handler for the tracer */
+static int tr_open(struct inode *in, struct file *filp)
+{
+	printk(LOG_LEVEL "TR device opened\n");
+	return 0;
+}
+
+/* release device handler for the tracer */
+static int tr_release(struct inode *in, struct file *filp)
+{
+	printk(LOG_LEVEL "TR device closed \n");
+	return 0;
+}
+
+/* ioctl handler for the tracer device */
+static long tr_ioctl (struct file *file, unsigned int cmd,
+	unsigned long arg)
+{
+	printk(LOG_LEVEL "TR device ioctl\n");
+	return 0;
+}
 
 const struct file_operations tr_fops = {
 	.owner = THIS_MODULE,
+	.open = tr_open,
+	.unlocked_ioctl = tr_ioctl,
+	.release = tr_release
 };
 
 static struct miscdevice tracer_dev = {
