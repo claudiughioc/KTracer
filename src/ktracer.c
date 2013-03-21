@@ -28,6 +28,17 @@ static long tr_ioctl (struct file *file, unsigned int cmd,
 	unsigned long arg)
 {
 	printk(LOG_LEVEL "TR device ioctl\n");
+	switch(cmd) {
+	case TRACER_ADD_PROCESS:
+		printk(LOG_LEVEL "Add process %d to monitor\n");
+		break;
+	case TRACER_REMOVE_PROCESS:
+		printk(LOG_LEVEL "Remove process to monitor\n");
+		break;
+	default:
+		return - ENOTTY;
+	}
+
 	return 0;
 }
 
