@@ -37,9 +37,11 @@ static void usage(const char *argv0)
 int main(int argc, char **argv)
 {
 	int fd;
+	int pid = 777;
 
-	if (argc < 2)
+	if (argc < 3)
 		usage(argv[0]);
+	pid = atoi(argv[2]);
 
 	if (strlen(argv[1]) != 1)
 		usage(argv[0]);
@@ -48,15 +50,12 @@ int main(int argc, char **argv)
 
 	switch (argv[1][0]) {
 	case 'a':
-		if (argc < 3)
-			usage(argv[0]);
-		if(ioctl(fd, MY_IOCTL_PRINT, 0) < 0)
+		if(ioctl(fd, TRACER_ADD_PROCESS, pid) < 0)
 			error("Error on ioctl\n");
 		break;
 	case 'r':
-		if (argc < 3)
-			usage(argv[0]);
-
+		if(ioctl(fd, TRACER_REMOVE_PROCESS, pid) < 0)
+			error("Error on ioctl\n");
 		break;
 	default:
 		error("Wrong parameter");
