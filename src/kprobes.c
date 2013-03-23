@@ -5,6 +5,19 @@
 
 #include "ktracer.h"
 
+/* Increase the number of hits for a specific function */
+static void add_counter(int pid, int func_index)
+{
+	struct proc_info *p_info;
+	struct hlist_node *i;
+
+	hash_for_each_possible(procs, p_info, i, hlh, pid) {
+		if (p_info->pid != pid)
+			continue;
+		atomic64_inc(&p_info->results[func_index]);
+	}
+}
+
 /* kmalloc handler */
 static int kmalloc_h(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
@@ -31,40 +44,42 @@ static int kfree_eh(struct kretprobe_instance *ri, struct pt_regs *regs)
 }
 
 /* schedule entry handler */
-static void schedule_en(void)
+asmlinkage void __sched schedule_en(void)
 {
-	printk(LOG_LEVEL "Schedule \n");
+	add_counter(current->pid, SCHEDULE_INDEX);
 	jprobe_return();
 }
 
 /* up entry handler */
 static void up_en(struct semaphore *sem)
 {
+	add_counter(current->pid, UP_INDEX);
 	jprobe_return();
 }
 
 /* down interruptible entry handler */
 static int down_en(struct semaphore *sem)
 {
-	printk(LOG_LEVEL "Sem down interruptible\n");
+	add_counter(current->pid, DOWN_INT_INDEX);
 	jprobe_return();
 	return 0;
 }
 
 /* mutex_lock entry handler */
-static void mutex_lock_en(struct mutex *lock)
+static void __sched mutex_lock_en(struct mutex *lock)
 {
-	printk(LOG_LEVEL "Mutex lock\n");
+	add_counter(current->pid, MUTEX_LCK_INDEX);
 	jprobe_return();
 }
 
 /* mutex_unlock entry handler */
-static void mutex_unlock_en(struct mutex *lock)
+static void __sched mutex_unlock_en(struct mutex *lock)
 {
-	printk(LOG_LEVEL "Mutex unlock\n");
+	add_counter(current->pid, MUTEX_ULK_INDEX);
 	jprobe_return();
 }
 
+/* Kretprobes for kmalloc and kfree */
 struct kretprobe **mem_probes = (struct kretprobe *[]){
 
 	/* Kretprobe for kmalloc */
@@ -90,6 +105,7 @@ struct kretprobe **mem_probes = (struct kretprobe *[]){
 	}
 };
 
+/* Jprobes for the rest of the functions needed */
 struct jprobe **func_probes = (struct jprobe *[]) {
 
 	/* Jprobe for schedule */

@@ -29,12 +29,26 @@
 #define KRETPROBE_NO		2
 #define JPROBE_NO		5
 
+#define KMALLOC_INDEX			0
+#define KFREE_INDEX			1
+#define KMALLOC_MEM_INDEX		2
+#define KFREE_MEM_INDEX			3
+#define SCHEDULE_INDEX			4
+#define UP_INDEX			5
+#define DOWN_INT_INDEX			6
+#define MUTEX_LCK_INDEX			7
+#define MUTEX_ULK_INDEX			8
+
+#define MY_HASH_BITS		8
+#define MY_HASH_SIZE	(1 << MY_HASH_BITS)
+
 #ifndef BUFSIZ
 #define BUFSIZ		4096
 #endif
 
 extern struct kretprobe **mem_probes;
 extern struct jprobe **func_probes;
+extern struct hlist_head procs[MY_HASH_SIZE];
 
 struct proc_info {
 	int pid;

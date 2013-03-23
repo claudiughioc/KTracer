@@ -9,7 +9,7 @@ MODULE_DESCRIPTION("Kprobe based tracer");
 MODULE_AUTHOR("Claudiu Ghioc");
 MODULE_LICENSE("GPL");
 
-DEFINE_HASHTABLE(procs, 8);
+DEFINE_HASHTABLE(procs, MY_HASH_BITS);
 
 /* open device handler for the tracer */
 static int tr_open(struct inode *in, struct file *filp)
@@ -28,6 +28,7 @@ static int tr_release(struct inode *in, struct file *filp)
 /* Add a pid to the hashtable of monitored processes */
 static int add_process(int pid) {
 	struct proc_info *p_info;
+	int i;
 
 	/* Allocate space for a new proc_info */
 	p_info = kmalloc(sizeof(*p_info), GFP_KERNEL);
@@ -36,6 +37,8 @@ static int add_process(int pid) {
 
 	/* Initialize and add structure to the hashtable */
 	p_info->pid = pid;
+	for (i = 0; i < FUNCTION_NO; i++)
+		atomic64_set(&p_info->results[i], 0);
 	hash_add(procs, &p_info->hlh, pid);
 
 	return 0;
@@ -101,18 +104,15 @@ static struct miscdevice tracer_dev = {
 
 static int ktracer_init(void)
 {
-	int ret = 0, i;
+	int ret = 0, i, j;
 	struct proc_info *p_info;
 
-	/* Register kretprobes */
-	ret = register_kretprobes(mem_probes, 2);
+	/* Register kprobes */
+	ret = register_kretprobes(mem_probes, KRETPROBE_NO);
 	if (ret) {
-		printk(LOG_LEVEL "Unable to register krets\n");
+		printk(LOG_LEVEL "Unable to register kretprobes\n");
 		return ret;
 	}
-
-
-	/* Register jprobes */
 	ret = register_jprobes(func_probes, JPROBE_NO);
 	if (ret) {
 		printk(LOG_LEVEL "Unable to register jprobes %d\n", ret);
@@ -125,11 +125,14 @@ static int ktracer_init(void)
 		return -EINVAL;
 	printk("Register tracer device\n");
 
+	// FIXME: remove this test
 	for (i = 0; i < 10; i++) {
 		p_info = kmalloc(sizeof(*p_info), GFP_KERNEL);
 		if (p_info == NULL)
 			return -ENOMEM;
 		p_info->pid = i;
+		for (j = 0; j < FUNCTION_NO; j++)
+			atomic64_set(&p_info->results[j], 0);
 		hash_add(procs, &p_info->hlh, i);
 	}
 
@@ -138,7 +141,7 @@ static int ktracer_init(void)
 
 static void ktracer_exit(void)
 {
-	int k = 0;
+	int k = 0, j;
 	struct hlist_node *i, *tmp;
 	struct proc_info *p_info;
 
@@ -151,13 +154,16 @@ static void ktracer_exit(void)
 
 	/* Delete the hashtable */
 	hash_for_each_safe(procs, k, i, tmp, p_info, hlh) {
-		printk("Removing proc info for %d\n", p_info->pid);
+		for (j = 0; j < 9; j++)
+			printk(LOG_LEVEL "p %dfunc %d : %lld ", p_info->pid, j,
+				atomic64_read(&p_info->results[j]));
 		hash_del(i);
 		kfree(p_info);
 	}
 
 
-	/* Unregister jprobes */
+	/* Unregister kprobes */
+	unregister_kretprobes(mem_probes, KRETPROBE_NO);
 	unregister_jprobes(func_probes, JPROBE_NO);
 	printk(LOG_LEVEL "Everything is clean\n");
 }
