@@ -9,6 +9,8 @@ MODULE_DESCRIPTION("Kprobe based tracer");
 MODULE_AUTHOR("Claudiu Ghioc");
 MODULE_LICENSE("GPL");
 
+DEFINE_HASHTABLE(procs, 8);
+
 /* open device handler for the tracer */
 static int tr_open(struct inode *in, struct file *filp)
 {
@@ -102,10 +104,25 @@ static int ktracer_init(void)
 	int ret = 0, i;
 	struct proc_info *p_info;
 
+	/* Register kretprobes */
+	ret = register_kretprobes(mem_probes, 2);
+	if (ret) {
+		printk(LOG_LEVEL "Unable to register krets\n");
+		return ret;
+	}
+
+
+	/* Register jprobes */
+	ret = register_jprobes(func_probes, JPROBE_NO);
+	if (ret) {
+		printk(LOG_LEVEL "Unable to register jprobes %d\n", ret);
+		return ret;
+	}
+
+
 	/* Register tracer device */
 	if (misc_register(&tracer_dev))
 		return -EINVAL;
-
 	printk("Register tracer device\n");
 
 	for (i = 0; i < 10; i++) {
@@ -115,7 +132,6 @@ static int ktracer_init(void)
 		p_info->pid = i;
 		hash_add(procs, &p_info->hlh, i);
 	}
-
 
 	return ret;
 }
@@ -139,6 +155,10 @@ static void ktracer_exit(void)
 		hash_del(i);
 		kfree(p_info);
 	}
+
+
+	/* Unregister jprobes */
+	unregister_jprobes(func_probes, JPROBE_NO);
 	printk(LOG_LEVEL "Everything is clean\n");
 }
 

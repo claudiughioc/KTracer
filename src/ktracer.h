@@ -5,10 +5,12 @@
 #include <linux/init.h>
 #include <linux/kernel.h>
 #include <linux/hashtable.h>
+#include <linux/semaphore.h>
 #include <linux/fs.h>
 #include <linux/slab.h>
 #include <linux/miscdevice.h>
 #include <linux/cdev.h>
+#include <linux/kprobes.h>
 #include <linux/sched.h>
 #include <linux/wait.h>
 #include <asm/ioctl.h>
@@ -24,12 +26,15 @@
 #define NUM_MINORS		1
 #define MODULE_NAME		"tracer"
 #define FUNCTION_NO		9
+#define KRETPROBE_NO		2
+#define JPROBE_NO		5
 
 #ifndef BUFSIZ
 #define BUFSIZ		4096
 #endif
 
-DEFINE_HASHTABLE(procs, 8);
+extern struct kretprobe **mem_probes;
+extern struct jprobe **func_probes;
 
 struct proc_info {
 	int pid;
