@@ -36,8 +36,7 @@ static void usage(const char *argv0)
 
 int main(int argc, char **argv)
 {
-	int fd;
-	int pid = 777;
+	int fd, pid;
 
 	if (argc < 3)
 		usage(argv[0]);
@@ -50,11 +49,13 @@ int main(int argc, char **argv)
 
 	switch (argv[1][0]) {
 	case 'a':
-		if(ioctl(fd, TRACER_ADD_PROCESS, pid) < 0)
+		printf("Add to trace process %d\n", pid);
+		if(ioctl(fd, TRACER_ADD_PROCESS, &pid) < 0)
 			error("Error on ioctl\n");
 		break;
 	case 'r':
-		if(ioctl(fd, TRACER_REMOVE_PROCESS, pid) < 0)
+		printf("Remove from trace process %d\n", pid);
+		if(ioctl(fd, TRACER_REMOVE_PROCESS, &pid) < 0)
 			error("Error on ioctl\n");
 		break;
 	default:
