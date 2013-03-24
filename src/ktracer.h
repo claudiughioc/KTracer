@@ -47,6 +47,7 @@
 
 #define PROC_FILE		"tracer"
 #define PROC_MODE		0444
+#define PID_MAX			65000
 
 #ifndef BUFSIZ
 #define BUFSIZ			4096
