@@ -9,6 +9,8 @@ struct handler_data {
 	long size;
 };
 
+struct mem_data test_data;
+
 /* Increase the number of hits for a specific function */
 static void inc_counter(int pid, int func_index)
 {
@@ -60,6 +62,25 @@ static void save_mm_info(long address, long size)
 	}
 }
 
+/* Retrieve allocation information (address, size) for a process */
+static struct mem_data* get_mm_info(long address, int pid)
+{
+	struct mem_data *mm_data;
+	struct proc_info *p_info;
+	struct hlist_node *i;
+
+	/* Get the process information */
+	hash_for_each_possible(procs, p_info, i, hlh, pid) {
+		if (p_info->pid != current->pid)
+			continue;
+		/* Search the appropriate association */
+		list_for_each_entry(mm_data, &p_info->mm, lh)
+			if (mm_data->address == address)
+				return mm_data;
+	}
+	return NULL;
+}
+
 /* kmalloc entry handler */
 static int kmalloc_eh(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
@@ -85,17 +106,26 @@ static int kmalloc_h(struct kretprobe_instance *ri, struct pt_regs *regs)
 	h_data = (struct handler_data *)ri->data;
 	retval = regs_return_value(regs);
 	add_counter(current->pid, KMALLOC_MEM_INDEX, h_data->size);
-	//printk(LOG_LEVEL "kmalloc handler %d, size %ld, ret %lx\n", current->pid, h_data->data, retval);
 
 	/* Save the association address - size */
 	save_mm_info(retval, h_data->size);
+
 	return 0;
 }
 
 /* kfree entry handler */
 static void kfree_en(const void *objp)
 {
+	struct mem_data *mm_info;
+
+	/* Get the size saved on kmalloc */
+	mm_info = get_mm_info((long)objp, current->pid);
+	if (mm_info == NULL)
+		goto out;
+	add_counter(current->pid, KFREE_MEM_INDEX, mm_info->size);
 	inc_counter(current->pid, KFREE_INDEX);
+
+out:
 	jprobe_return();
 }
 
