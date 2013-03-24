@@ -153,7 +153,14 @@ static int ktracer_init(void)
 	/* Register tracer device */
 	if (misc_register(&tracer_dev))
 		return -EINVAL;
-	printk("Register tracer device\n");
+	printk(LOG_LEVEL "Register tracer device\n");
+
+
+	/* Create entry in /proc */
+	if (!(proc_kt = create_proc_read_entry(PROC_FILE, PROC_MODE,
+		NULL, tracer_read, NULL)))
+		printk(LOG_LEVEL "Unable to create /proc entry\n");
+
 
 	// FIXME: remove this test
 	for (i = 0; i < 10; i++)
@@ -194,6 +201,11 @@ static void ktracer_exit(void)
 	/* Restore the original exit_group */
 	sys_call_table[__NR_exit_group] = exitg_syscall;
 	printk(LOG_LEVEL "Everything is clean\n");
+
+
+	/* Remove the /proc entry */
+	if (proc_kt)
+		remove_proc_entry(PROC_FILE, NULL);
 }
 
 module_init(ktracer_init);

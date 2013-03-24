@@ -97,6 +97,13 @@ static int kmalloc_eh(struct kretprobe_instance *ri, struct pt_regs *regs)
 /* kfree handler */
 static int kfree_h(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
+	int ret;
+
+	if (current->pid > 3000) {
+		printk("%d Will free from %lx\n", current->pid, regs->bx);
+		if (ZERO_OR_NULL_PTR((void *)regs->bx))
+			printk("%d freed address %lx\n", current->pid, regs->bx);
+	}
 	return 0;
 }
 
