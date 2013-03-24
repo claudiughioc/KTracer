@@ -18,18 +18,15 @@
 
 #include <asm/ioctl.h>
 #include <asm/uaccess.h>
-#include "tr_ioctl.h"
+#include "tracer.h"
 
 #define BUFFER_SIZE		256
 
 #define LOG_LEVEL		KERN_ALERT
 
 #define TRACER_MAJOR		10
-#define TRACER_MINOR		42
 #define NUM_MINORS		1
-#define MODULE_NAME		"tracer"
 #define FUNCTION_NO		9
-#define KRETPROBE_NO		1
 #define JPROBE_NO		6
 
 #define KMALLOC_INDEX		0
@@ -54,7 +51,7 @@
 #endif
 
 extern void *sys_call_table[];
-extern struct kretprobe **mem_probes;
+extern struct kretprobe *mem_probe;
 extern struct jprobe **func_probes;
 extern struct hlist_head procs[MY_HASH_SIZE];
 extern struct proc_dir_entry *proc_kt;

@@ -4,7 +4,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
-#include "../src/tr_ioctl.h"
+#include "../src/tracer.h"
 
 #define DEVICE_PATH	"/dev/tracer"
 

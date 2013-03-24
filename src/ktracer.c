@@ -129,8 +129,8 @@ const struct file_operations tr_fops = {
 };
 
 static struct miscdevice tracer_dev = {
-	.minor  = MISC_DYNAMIC_MINOR,
-	.name   = MODULE_NAME,
+	.minor  = TRACER_DEV_MINOR,
+	.name   = TRACER_DEV_NAME,
 	.fops   = &tr_fops,
 };
 
@@ -152,7 +152,7 @@ static int ktracer_init(void)
 
 
 	/* Register kprobes */
-	ret = register_kretprobes(mem_probes, KRETPROBE_NO);
+	ret = register_kretprobe(mem_probe);
 	if (ret) {
 		printk(LOG_LEVEL "Unable to register kretprobes\n");
 		return ret;
@@ -193,7 +193,7 @@ static void ktracer_exit(void)
 	destroy_hasht();
 
 	/* Unregister kprobes */
-	unregister_kretprobes(mem_probes, KRETPROBE_NO);
+	unregister_kretprobe(mem_probe);
 	unregister_jprobes(func_probes, JPROBE_NO);
 
 

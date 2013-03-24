@@ -19,7 +19,7 @@ static int print_proc_info(int pid, char *buff)
 		if (p_info->pid != pid)
 			continue;
 
-		tlen = sprintf(buff, "%-5d%-9lld%-7lld%-13lld%-11lld"
+		tlen = sprintf(buff, "%-6d%-9lld%-7lld%-13lld%-11lld"
 			"%-7lld%-5lld%-6lld%-6lld%-6lld\n",
 			p_info->pid,
 			atomic64_read(&p_info->results[KMALLOC_INDEX]),
@@ -51,7 +51,7 @@ int tracer_read(char *buff, char **buff_start, off_t off, int buff_len,
 
 
 	/* The header line */
-	len = sprintf(buff, "PID  kmalloc  kfree  kmalloc_mem  kfree_mem  "
+	len = sprintf(buff, "PID   kmalloc  kfree  kmalloc_mem  kfree_mem  "
 		"sched  up   down  lock  unlock\n");
 
 	/* Print process information starting with the smallest pid */

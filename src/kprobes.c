@@ -166,7 +166,7 @@ static void __sched mutex_unlock_en(struct mutex *lock)
 }
 
 /* Kretprobes for kmalloc and kfree */
-struct kretprobe **mem_probes = (struct kretprobe *[]){
+struct kretprobe *mem_probe = (struct kretprobe *){
 
 	/* Kretprobe for kmalloc */
 	& (struct kretprobe) {
