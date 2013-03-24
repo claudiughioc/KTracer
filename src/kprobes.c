@@ -5,7 +5,6 @@
 
 #include "ktracer.h"
 
-
 struct handler_data {
 	long size;
 };
@@ -61,6 +60,21 @@ static void save_mm_info(long address, long size)
 	}
 }
 
+/* kmalloc entry handler */
+static int kmalloc_eh(struct kretprobe_instance *ri, struct pt_regs *regs)
+{
+	struct handler_data *h_data;
+
+	/* Add to hit count and memory size */
+	inc_counter(current->pid, KMALLOC_INDEX);
+
+	/* Save the size to allocate */
+	h_data = (struct handler_data *)ri->data;
+	h_data->size = regs->ax;
+
+	return 0;
+}
+
 /* kmalloc handler */
 static int kmalloc_h(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
@@ -70,48 +84,19 @@ static int kmalloc_h(struct kretprobe_instance *ri, struct pt_regs *regs)
 	/* Get the saved size */
 	h_data = (struct handler_data *)ri->data;
 	retval = regs_return_value(regs);
-	printk(LOG_LEVEL "kmalloc handler %d, size %ld, ret %lx\n", current->pid, h_data->size, retval);
+	add_counter(current->pid, KMALLOC_MEM_INDEX, h_data->size);
+	//printk(LOG_LEVEL "kmalloc handler %d, size %ld, ret %lx\n", current->pid, h_data->data, retval);
 
 	/* Save the association address - size */
 	save_mm_info(retval, h_data->size);
 	return 0;
 }
 
-/* kmalloc entry handler */
-static int kmalloc_eh(struct kretprobe_instance *ri, struct pt_regs *regs)
-{
-	struct handler_data *h_data;
-
-	/* Add to hit count and memory size */
-	inc_counter(current->pid, KMALLOC_INDEX);
-	add_counter(current->pid, KMALLOC_MEM_INDEX, regs->ax);
-	printk(LOG_LEVEL "kmalloc entry %d, size %ld\n", current->pid, regs->ax);
-
-	/* Save the size to allocate */
-	h_data = (struct handler_data *)ri->data;
-	h_data->size = regs->ax;
-
-	return 0;
-}
-
-/* kfree handler */
-static int kfree_h(struct kretprobe_instance *ri, struct pt_regs *regs)
-{
-	int ret;
-
-	if (current->pid > 3000) {
-		printk("%d Will free from %lx\n", current->pid, regs->bx);
-		if (ZERO_OR_NULL_PTR((void *)regs->bx))
-			printk("%d freed address %lx\n", current->pid, regs->bx);
-	}
-	return 0;
-}
-
 /* kfree entry handler */
-static int kfree_eh(struct kretprobe_instance *ri, struct pt_regs *regs)
+static void kfree_en(const void *objp)
 {
 	inc_counter(current->pid, KFREE_INDEX);
-	return 0;
+	jprobe_return();
 }
 
 /* schedule entry handler */
@@ -163,21 +148,18 @@ struct kretprobe **mem_probes = (struct kretprobe *[]){
 		.maxactive	= NR_CPUS,
 		.data_size	= sizeof(struct handler_data)
 	},
-
-	/* Kretprobe for kfree */
-	& (struct kretprobe) {
-		.kp = {
-			.symbol_name = "kfree"
-		},
-		.entry_handler	= kfree_eh,
-		.handler	= kfree_h,
-		.maxactive	= NR_CPUS,
-		.data_size	= sizeof(struct handler_data)
-	}
 };
 
 /* Jprobes for the rest of the functions needed */
 struct jprobe **func_probes = (struct jprobe *[]) {
+
+	/* Jprobe for kfree */
+	& (struct jprobe) {
+		.kp = {
+			.symbol_name = "kfree"
+		},
+		.entry = kfree_en
+	},
 
 	/* Jprobe for schedule */
 	& (struct jprobe) {

@@ -61,6 +61,20 @@ static void destroy_list(struct list_head *list)
 	}
 }
 
+/* Destroy the hashtable with process information */
+static void destroy_hasht(void)
+{
+	int k = 0;
+	struct hlist_node *i, *tmp;
+	struct proc_info *p_info;
+
+	hash_for_each_safe(procs, k, i, tmp, p_info, hlh) {
+		destroy_list(&p_info->mm);
+		hash_del(i);
+		kfree(p_info);
+	}
+}
+
 /* Remove a pid from the hashtable of monitored processes */
 static int remove_process(int pid) {
 	struct hlist_node *i, *tmp;
@@ -171,27 +185,12 @@ static int ktracer_init(void)
 
 static void ktracer_exit(void)
 {
-	int k = 0, j;
-	struct hlist_node *i, *tmp;
-	struct proc_info *p_info;
-
 	/* Unregister tracer device */
-	if (misc_deregister(&tracer_dev)) {
+	if (misc_deregister(&tracer_dev))
 		printk(LOG_LEVEL "Unable to unregister tracer device\n");
-		return;
-	}
-	printk(LOG_LEVEL "Unregistered device\n");
 
 	/* Delete the hashtable */
-	hash_for_each_safe(procs, k, i, tmp, p_info, hlh) {
-		for (j = 0; j < 9; j++)
-			printk(LOG_LEVEL "p %dfunc %d : %lld ", p_info->pid, j,
-				atomic64_read(&p_info->results[j]));
-		destroy_list(&p_info->mm);
-		hash_del(i);
-		kfree(p_info);
-	}
-
+	destroy_hasht();
 
 	/* Unregister kprobes */
 	unregister_kretprobes(mem_probes, KRETPROBE_NO);

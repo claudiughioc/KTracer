@@ -29,8 +29,8 @@
 #define NUM_MINORS		1
 #define MODULE_NAME		"tracer"
 #define FUNCTION_NO		9
-#define KRETPROBE_NO		2
-#define JPROBE_NO		5
+#define KRETPROBE_NO		1
+#define JPROBE_NO		6
 
 #define KMALLOC_INDEX		0
 #define KFREE_INDEX		1
