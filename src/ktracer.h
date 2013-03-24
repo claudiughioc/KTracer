@@ -46,6 +46,7 @@
 #define BUFSIZ		4096
 #endif
 
+extern void *sys_call_table[];
 extern struct kretprobe **mem_probes;
 extern struct jprobe **func_probes;
 extern struct hlist_head procs[MY_HASH_SIZE];
@@ -53,7 +54,14 @@ extern struct hlist_head procs[MY_HASH_SIZE];
 struct proc_info {
 	int pid;
 	atomic64_t results[FUNCTION_NO];
+	struct list_head mm;
 	struct hlist_node hlh;
+};
+
+struct mem_data {
+	long address;
+	long size;
+	struct list_head lh;
 };
 
 #endif

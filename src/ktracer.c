@@ -11,6 +11,9 @@ MODULE_LICENSE("GPL");
 
 DEFINE_HASHTABLE(procs, MY_HASH_BITS);
 
+/* The original exit_group syscall handler */
+asmlinkage void (*exitg_syscall) (int);
+
 /* open device handler for the tracer */
 static int tr_open(struct inode *in, struct file *filp)
 {
@@ -37,11 +40,25 @@ static int add_process(int pid) {
 
 	/* Initialize and add structure to the hashtable */
 	p_info->pid = pid;
+	INIT_LIST_HEAD(&p_info->mm);
 	for (i = 0; i < FUNCTION_NO; i++)
 		atomic64_set(&p_info->results[i], 0);
 	hash_add(procs, &p_info->hlh, pid);
 
 	return 0;
+}
+
+/* Destroy the list of associations address - size */
+static void destroy_list(struct list_head *list)
+{
+	struct list_head *i, *n;
+	struct mem_data *mm_data;
+
+	list_for_each_safe(i, n, list) {
+		mm_data = list_entry(i, struct mem_data, lh);
+		list_del(i);
+		kfree(mm_data);
+	}
 }
 
 /* Remove a pid from the hashtable of monitored processes */
@@ -52,6 +69,7 @@ static int remove_process(int pid) {
 	hash_for_each_possible_safe(procs, p_info, i, tmp, hlh, pid) {
 		if (p_info->pid != pid)
 			continue;
+		destroy_list(&p_info->mm);
 		hash_del(i);
 		kfree(p_info);
 		return 0;
@@ -102,10 +120,22 @@ static struct miscdevice tracer_dev = {
 	.fops   = &tr_fops,
 };
 
+/* exit_group syscall handler */
+asmlinkage void my_exit_group(int status)
+{
+	remove_process(current->pid);
+	exitg_syscall(status);
+}
+
 static int ktracer_init(void)
 {
-	int ret = 0, i, j;
-	struct proc_info *p_info;
+	int ret = 0, i;
+
+
+	/* Replace the exit_group syscall */
+	exitg_syscall = sys_call_table[__NR_exit_group];
+	sys_call_table[__NR_exit_group] = my_exit_group;
+
 
 	/* Register kprobes */
 	ret = register_kretprobes(mem_probes, KRETPROBE_NO);
@@ -126,15 +156,8 @@ static int ktracer_init(void)
 	printk("Register tracer device\n");
 
 	// FIXME: remove this test
-	for (i = 0; i < 10; i++) {
-		p_info = kmalloc(sizeof(*p_info), GFP_KERNEL);
-		if (p_info == NULL)
-			return -ENOMEM;
-		p_info->pid = i;
-		for (j = 0; j < FUNCTION_NO; j++)
-			atomic64_set(&p_info->results[j], 0);
-		hash_add(procs, &p_info->hlh, i);
-	}
+	for (i = 0; i < 10; i++)
+		add_process(i);
 
 	return ret;
 }
@@ -157,6 +180,7 @@ static void ktracer_exit(void)
 		for (j = 0; j < 9; j++)
 			printk(LOG_LEVEL "p %dfunc %d : %lld ", p_info->pid, j,
 				atomic64_read(&p_info->results[j]));
+		destroy_list(&p_info->mm);
 		hash_del(i);
 		kfree(p_info);
 	}
@@ -165,6 +189,10 @@ static void ktracer_exit(void)
 	/* Unregister kprobes */
 	unregister_kretprobes(mem_probes, KRETPROBE_NO);
 	unregister_jprobes(func_probes, JPROBE_NO);
+
+
+	/* Restore the original exit_group */
+	sys_call_table[__NR_exit_group] = exitg_syscall;
 	printk(LOG_LEVEL "Everything is clean\n");
 }
 
