@@ -145,7 +145,6 @@ static int ktracer_init(void)
 {
 	int ret = 0, i;
 
-
 	/* Replace the exit_group syscall */
 	exitg_syscall = sys_call_table[__NR_exit_group];
 	sys_call_table[__NR_exit_group] = my_exit_group;
@@ -154,32 +153,46 @@ static int ktracer_init(void)
 	/* Register kprobes */
 	ret = register_kretprobe(mem_probe);
 	if (ret) {
-		printk(LOG_LEVEL "Unable to register kretprobes\n");
-		return ret;
+		printk(LOG_LEVEL "Unable to register kretprobe\n");
+		goto restore_eg;
 	}
 	ret = register_jprobes(func_probes, JPROBE_NO);
 	if (ret) {
 		printk(LOG_LEVEL "Unable to register jprobes %d\n", ret);
-		return ret;
+		goto restore_eg;
 	}
 
 
 	/* Register tracer device */
-	if (misc_register(&tracer_dev))
-		return -EINVAL;
-	printk(LOG_LEVEL "Register tracer device\n");
+	if (misc_register(&tracer_dev)) {
+		ret = -EINVAL;
+		goto ureg_kp;
+	}
 
 
 	/* Create entry in /proc */
 	if (!(proc_kt = create_proc_read_entry(PROC_FILE, PROC_MODE,
-		NULL, tracer_read, NULL)))
+		NULL, tracer_read, NULL))) {
 		printk(LOG_LEVEL "Unable to create /proc entry\n");
-
+		goto ureg_dev;
+	}
+	printk(LOG_LEVEL "Device 'tracer' initiated\n");
 
 	// FIXME: remove this test
 	for (i = 0; i < 10; i++)
 		add_process(i);
 
+	return 0;
+
+ureg_dev:
+	misc_deregister(&tracer_dev);
+
+ureg_kp:
+	unregister_kretprobe(mem_probe);
+	unregister_jprobes(func_probes, JPROBE_NO);
+
+restore_eg:
+	sys_call_table[__NR_exit_group] = exitg_syscall;
 	return ret;
 }
 
