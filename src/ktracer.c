@@ -94,15 +94,11 @@ static int remove_process(int pid) {
 
 /* ioctl handler for the tracer device */
 static long tr_ioctl (struct file *file, unsigned int cmd,
-	unsigned long arg)
+	unsigned long pid)
 {
-	int pid, ret = 0;
+	int ret = 0;
 
-	/* Get the pid of the process */
-	if(copy_from_user(&pid, (int __user *)arg, sizeof(int)))
-		return -EFAULT;
-
-	printk(LOG_LEVEL "Process %d ", pid);
+	printk(LOG_LEVEL "Process %ld ", pid);
 	switch (cmd) {
 	case TRACER_ADD_PROCESS:
 
@@ -117,7 +113,6 @@ static long tr_ioctl (struct file *file, unsigned int cmd,
 	default:
 		ret = -ENOTTY;
 	}
-
 	return ret;
 }
 
@@ -178,9 +173,11 @@ static int ktracer_init(void)
 	}
 	printk(LOG_LEVEL "Device 'tracer' initiated\n");
 
+	/*
 	// FIXME: remove this test
 	for (i = 0; i < 10; i++)
 		add_process(i);
+		*/
 
 	return 0;
 
