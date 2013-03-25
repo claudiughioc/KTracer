@@ -165,16 +165,16 @@ static int ktracer_init(void)
 
 
 	/* Create entry in /proc */
-	if (!(proc_kt = create_proc_read_entry(PROC_FILE, PROC_MODE,
-		NULL, tracer_read, NULL))) {
+	if (!(proc_kt = create_proc_entry(PROC_FILE, PROC_MODE, NULL))) {
 		printk(LOG_LEVEL "Unable to create /proc entry\n");
 		goto ureg_dev;
 	}
+	proc_kt->proc_fops = &tr_proc_ops;
 	printk(LOG_LEVEL "Device 'tracer' initiated\n");
 
-	/*
 	// FIXME: remove this test
-	for (i = 0; i < 10; i++)
+	/*
+	for (i = 0; i < 20; i++)
 		add_process(i);
 		*/
 

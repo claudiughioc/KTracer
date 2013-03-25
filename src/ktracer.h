@@ -55,6 +55,7 @@ extern struct kretprobe *mem_probe;
 extern struct jprobe **func_probes;
 extern struct hlist_head procs[MY_HASH_SIZE];
 extern struct proc_dir_entry *proc_kt;
+extern struct file_operations tr_proc_ops;
 
 struct proc_info {
 	int pid;
@@ -69,6 +70,4 @@ struct mem_data {
 	struct list_head lh;
 };
 
-int tracer_read(char *page, char **start, off_t off, int count,
-	int *eof, void *data);
 #endif
