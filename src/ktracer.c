@@ -27,27 +27,6 @@ static int tr_release(struct inode *in, struct file *filp)
 	printk(LOG_LEVEL "TR device closed \n");
 	return 0;
 }
-
-/* Add a pid to the hashtable of monitored processes */
-static int add_process(int pid) {
-	struct proc_info *p_info;
-	int i;
-
-	/* Allocate space for a new proc_info */
-	p_info = kmalloc(sizeof(*p_info), GFP_KERNEL);
-	if (p_info == NULL)
-		return -ENOMEM;
-
-	/* Initialize and add structure to the hashtable */
-	p_info->pid = pid;
-	INIT_LIST_HEAD(&p_info->mm);
-	for (i = 0; i < FUNCTION_NO; i++)
-		atomic64_set(&p_info->results[i], 0);
-	hash_add(procs, &p_info->hlh, pid);
-
-	return 0;
-}
-
 /* Destroy the list of associations address - size */
 static void destroy_list(struct list_head *list)
 {
@@ -73,6 +52,26 @@ static void destroy_hasht(void)
 		hash_del(i);
 		kfree(p_info);
 	}
+}
+
+/* Add a pid to the hashtable of monitored processes */
+static int add_process(int pid) {
+	struct proc_info *p_info;
+	int i;
+
+	/* Allocate space for a new proc_info */
+	p_info = kmalloc(sizeof(*p_info), GFP_KERNEL);
+	if (p_info == NULL)
+		return -ENOMEM;
+
+	/* Initialize and add structure to the hashtable */
+	p_info->pid = pid;
+	INIT_LIST_HEAD(&p_info->mm);
+	for (i = 0; i < FUNCTION_NO; i++)
+		atomic64_set(&p_info->results[i], 0);
+	hash_add(procs, &p_info->hlh, pid);
+
+	return 0;
 }
 
 /* Remove a pid from the hashtable of monitored processes */

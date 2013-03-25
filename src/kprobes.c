@@ -17,6 +17,7 @@ static void inc_counter(int pid, int func_index)
 	struct proc_info *p_info;
 	struct hlist_node *i;
 
+	/* Search the bucket for the process info */
 	hash_for_each_possible(procs, p_info, i, hlh, pid) {
 		if (p_info->pid != pid)
 			continue;
@@ -31,6 +32,7 @@ static void add_counter(int pid, int func_index, long quant)
 	struct proc_info *p_info;
 	struct hlist_node *i;
 
+	/* Search the bucket for the process info */
 	hash_for_each_possible(procs, p_info, i, hlh, pid) {
 		if (p_info->pid != pid)
 			continue;
@@ -63,22 +65,30 @@ static void save_mm_info(long address, long size)
 }
 
 /* Retrieve allocation information (address, size) for a process */
-static struct mem_data* get_mm_info(long address, int pid)
+static int get_mm_info(long address, int pid, struct mem_data *res)
 {
 	struct mem_data *mm_data;
 	struct proc_info *p_info;
 	struct hlist_node *i;
+	struct list_head *j, *tmp;
 
-	/* Get the process information */
+	/* Get the process information, search the bucket */
 	hash_for_each_possible(procs, p_info, i, hlh, pid) {
 		if (p_info->pid != current->pid)
 			continue;
-		/* Search the appropriate association */
-		list_for_each_entry(mm_data, &p_info->mm, lh)
-			if (mm_data->address == address)
-				return mm_data;
+
+		/* Search the appropriate association and remove it*/
+		list_for_each_safe(j, tmp, &p_info->mm) {
+			mm_data = list_entry(j, struct mem_data, lh);
+			if (mm_data->address == address) {
+				*res = *mm_data;
+				list_del(j);
+				kfree(mm_data);
+				return 0;
+			}
+		}
 	}
-	return NULL;
+	return -EINVAL;
 }
 
 /* kmalloc entry handler */
@@ -86,7 +96,7 @@ static int kmalloc_eh(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
 	struct handler_data *h_data;
 
-	/* Add to hit count and memory size */
+	/* Add to hit count */
 	inc_counter(current->pid, KMALLOC_INDEX);
 
 	/* Save the size to allocate */
@@ -119,13 +129,14 @@ static void kfree_en(const void *objp)
 	struct mem_data *mm_info;
 
 	/* Get the size saved on kmalloc */
-	mm_info = get_mm_info((long)objp, current->pid);
-	if (mm_info == NULL)
+	mm_info = kmalloc(sizeof(*mm_info), GFP_KERNEL);
+	if (get_mm_info((long)objp, current->pid, mm_info))
 		goto out;
 	add_counter(current->pid, KFREE_MEM_INDEX, mm_info->size);
 	inc_counter(current->pid, KFREE_INDEX);
 
 out:
+	kfree(mm_info);
 	jprobe_return();
 }
 
