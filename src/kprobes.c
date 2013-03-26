@@ -11,21 +11,6 @@ struct handler_data {
 
 struct mem_data test_data;
 
-/* Increase the number of hits for a specific function */
-static void inc_counter(int pid, int func_index)
-{
-	struct proc_info *p_info;
-	struct hlist_node *i;
-
-	/* Search the bucket for the process info */
-	hash_for_each_possible(procs, p_info, i, hlh, pid) {
-		if (p_info->pid != pid)
-			continue;
-		atomic64_inc(&p_info->results[func_index]);
-		break;
-	}
-}
-
 /* Add to the number of allocated/freed memory */
 static void add_counter(int pid, int func_index, long quant)
 {
@@ -39,6 +24,12 @@ static void add_counter(int pid, int func_index, long quant)
 		atomic64_add(quant, &p_info->results[func_index]);
 		break;
 	}
+}
+
+/* Increase the number of hits for a specific function */
+static void inc_counter(int pid, int func_index)
+{
+	add_counter(pid, func_index, 1);
 }
 
 /* Save the association between address - size in process info */
