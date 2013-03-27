@@ -10,6 +10,8 @@ MODULE_AUTHOR("Claudiu Ghioc");
 MODULE_LICENSE("GPL");
 
 DEFINE_HASHTABLE(procs, MY_HASH_BITS);
+spinlock_t hlocks[MY_HASH_SIZE];
+DEFINE_SPINLOCK(hash_lock);
 
 /* The original exit_group syscall handler */
 asmlinkage void (*exitg_syscall) (int);
@@ -57,7 +59,7 @@ static void destroy_hasht(void)
 /* Add a pid to the hashtable of monitored processes */
 static int add_process(int pid) {
 	struct proc_info *p_info;
-	int i;
+	int i, hash;
 
 	/* Allocate space for a new proc_info */
 	p_info = kmalloc(sizeof(*p_info), GFP_KERNEL);
@@ -69,6 +71,8 @@ static int add_process(int pid) {
 	INIT_LIST_HEAD(&p_info->mm);
 	for (i = 0; i < FUNCTION_NO; i++)
 		atomic64_set(&p_info->results[i], 0);
+
+	hash = hash_min(pid, HASH_BITS(procs));
 	hash_add(procs, &p_info->hlh, pid);
 
 	return 0;
@@ -78,15 +82,29 @@ static int add_process(int pid) {
 static int remove_process(int pid) {
 	struct hlist_node *i, *tmp;
 	struct proc_info *p_info;
+	int hash;
 
+	hash = hash_min(pid, HASH_BITS(procs));
+	printk("Iau spinlock la remove\n");
+	spin_lock(&hash_lock);
+	printk("Am luat spinlock la remov\n");
+	//spin_lock(&hlocks[hash]);
 	hash_for_each_possible_safe(procs, p_info, i, tmp, hlh, pid) {
 		if (p_info->pid != pid)
 			continue;
 		destroy_list(&p_info->mm);
 		hash_del(i);
 		kfree(p_info);
+		//spin_unlock(&hlocks[hash]);
+		printk("Dau drumul la spinlock la remove\n");
+		spin_unlock(&hash_lock);
+		printk("Am dat drumul la spinlock la remove\n");
 		return 0;
 	}
+	printk("Dau drumul la spinlock la remove\n");
+	spin_unlock(&hash_lock);
+	printk("Am dat drumul la spinlock la remove\n");
+	//spin_unlock(&hlocks[hash]);
 
 	return -EINVAL;
 }
@@ -143,6 +161,8 @@ static int ktracer_init(void)
 	exitg_syscall = sys_call_table[__NR_exit_group];
 	sys_call_table[__NR_exit_group] = my_exit_group;
 
+	for (i = 0; i < MY_HASH_SIZE; i++)
+		spin_lock_init(&hlocks[i]);
 
 	/* Register kprobes */
 	ret = register_kretprobe(mem_probe);
@@ -173,10 +193,8 @@ static int ktracer_init(void)
 	printk(LOG_LEVEL "Device 'tracer' initiated\n");
 
 	// FIXME: remove this test
-	/*
-	for (i = 0; i < 20; i++)
+	for (i = 0; i < 40; i++)
 		add_process(i);
-		*/
 
 	return 0;
 

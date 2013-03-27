@@ -42,6 +42,9 @@ static void print_proc_info(struct seq_file *s, int pid)
  */
 static void *tr_seq_start(struct seq_file *s, loff_t *pos)
 {
+	printk("Iau spinlock la start\n");
+	spin_lock(&hash_lock);
+	printk("Am luat spinlock la start\n");
 	/* The ending condition for iterator */
 	if (*pos > 0)
 		return NULL;
@@ -72,7 +75,7 @@ static void *tr_seq_next(struct seq_file *s, void *v, loff_t *pos)
 
 
 	/* Get the smallest pid in aux_pid */
-	hash_for_each_safe(procs, k, i, tmp, p_info, hlh)
+	hash_for_each_safe(procs, k, i, tmp, p_info, hlh) {
 		if (p_info->pid > last_pid &&
 				p_info->pid - last_pid < pid_diff) {
 			aux_pid = p_info->pid;
@@ -80,9 +83,13 @@ static void *tr_seq_next(struct seq_file *s, void *v, loff_t *pos)
 			found = 1;
 		}
 
+	}
+
 	/* Finish iteration if nothing found */
-	if (!found)
+	printk("Will print %d\n", aux_pid);
+	if (!found) {
 		return NULL;
+	}
 	*pos = aux_pid;
 	return pos;
 }
@@ -91,7 +98,12 @@ static void *tr_seq_next(struct seq_file *s, void *v, loff_t *pos)
  * When the kernel is done with the iterator it calls "stop"
  * to clean up eventual data.
  */
-static void tr_seq_stop(struct seq_file *s, void *v){};
+static void tr_seq_stop(struct seq_file *s, void *v)
+{
+	printk("Dau drumul la spinlock la stop");
+	spin_unlock(&hash_lock);
+	printk("Am dat drumul la spinlock la stop\n");
+};
 
 /*
  * In between the calls to iterator the kernel calls

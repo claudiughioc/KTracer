@@ -56,10 +56,13 @@ extern struct jprobe **func_probes;
 extern struct hlist_head procs[MY_HASH_SIZE];
 extern struct proc_dir_entry *proc_kt;
 extern struct file_operations tr_proc_ops;
+extern spinlock_t hlocks[MY_HASH_SIZE];
+extern spinlock_t hash_lock;
 
 struct proc_info {
 	int pid;
 	atomic64_t results[FUNCTION_NO];
+	spinlock_t llock;
 	struct list_head mm;
 	struct hlist_node hlh;
 };
@@ -69,5 +72,8 @@ struct mem_data {
 	long size;
 	struct list_head lh;
 };
+
+int tracer_read(char *buff, char **buff_start, off_t off, int buff_len,
+		int *eof, void *data);
 
 #endif
