@@ -11,7 +11,6 @@ MODULE_LICENSE("GPL");
 
 DEFINE_HASHTABLE(procs, MY_HASH_BITS);
 spinlock_t hlocks[MY_HASH_SIZE];
-DEFINE_SPINLOCK(hash_lock);
 
 /* The original exit_group syscall handler */
 asmlinkage void (*exitg_syscall) (int);
@@ -49,10 +48,17 @@ static void destroy_hasht(void)
 	struct hlist_node *i, *tmp;
 	struct proc_info *p_info;
 
-	hash_for_each_safe(procs, k, i, tmp, p_info, hlh) {
-		destroy_list(&p_info->mm);
-		hash_del(i);
-		kfree(p_info);
+
+	for (k = 0; k < HASH_SIZE(procs); k++) {
+		spin_lock(&hlocks[k]);
+
+		hlist_for_each_entry_safe(p_info, i, tmp, &procs[k], hlh) {
+			destroy_list(&p_info->mm);
+			hash_del(i);
+			kfree(p_info);
+		}
+
+		spin_unlock(&hlocks[k]);
 	}
 }
 
@@ -69,11 +75,13 @@ static int add_process(int pid) {
 	/* Initialize and add structure to the hashtable */
 	p_info->pid = pid;
 	INIT_LIST_HEAD(&p_info->mm);
+	spin_lock_init(&p_info->llock);
 	for (i = 0; i < FUNCTION_NO; i++)
 		atomic64_set(&p_info->results[i], 0);
 
-	hash = hash_min(pid, HASH_BITS(procs));
+	spin_lock(&hlocks[hash_min(pid, HASH_BITS(procs))]);
 	hash_add(procs, &p_info->hlh, pid);
+	spin_unlock(&hlocks[hash_min(pid, HASH_BITS(procs))]);
 
 	return 0;
 }
@@ -82,29 +90,23 @@ static int add_process(int pid) {
 static int remove_process(int pid) {
 	struct hlist_node *i, *tmp;
 	struct proc_info *p_info;
-	int hash;
 
-	hash = hash_min(pid, HASH_BITS(procs));
-	printk("Iau spinlock la remove\n");
-	spin_lock(&hash_lock);
-	printk("Am luat spinlock la remov\n");
-	//spin_lock(&hlocks[hash]);
+
+	/* Lock the bucket */
+	spin_lock(&hlocks[hash_min(pid, HASH_BITS(procs))]);
+
 	hash_for_each_possible_safe(procs, p_info, i, tmp, hlh, pid) {
 		if (p_info->pid != pid)
 			continue;
 		destroy_list(&p_info->mm);
 		hash_del(i);
 		kfree(p_info);
-		//spin_unlock(&hlocks[hash]);
-		printk("Dau drumul la spinlock la remove\n");
-		spin_unlock(&hash_lock);
-		printk("Am dat drumul la spinlock la remove\n");
+		spin_unlock(&hlocks[hash_min(pid, HASH_BITS(procs))]);
 		return 0;
 	}
-	printk("Dau drumul la spinlock la remove\n");
-	spin_unlock(&hash_lock);
-	printk("Am dat drumul la spinlock la remove\n");
-	//spin_unlock(&hlocks[hash]);
+
+	/* Unlock the bucket */
+	spin_unlock(&hlocks[hash_min(pid, HASH_BITS(procs))]);
 
 	return -EINVAL;
 }
@@ -149,6 +151,7 @@ static struct miscdevice tracer_dev = {
 /* exit_group syscall handler */
 asmlinkage void my_exit_group(int status)
 {
+	printk("Removing process %d\n", current->pid);
 	remove_process(current->pid);
 	exitg_syscall(status);
 }
@@ -157,12 +160,10 @@ static int ktracer_init(void)
 {
 	int ret = 0, i;
 
-	/* Replace the exit_group syscall */
-	exitg_syscall = sys_call_table[__NR_exit_group];
-	sys_call_table[__NR_exit_group] = my_exit_group;
-
+	printk("Initiez pana la %d\n", MY_HASH_SIZE);
 	for (i = 0; i < MY_HASH_SIZE; i++)
 		spin_lock_init(&hlocks[i]);
+
 
 	/* Register kprobes */
 	ret = register_kretprobe(mem_probe);
@@ -176,6 +177,10 @@ static int ktracer_init(void)
 		goto restore_eg;
 	}
 
+	/* Replace the exit_group syscall */
+	exitg_syscall = sys_call_table[__NR_exit_group];
+	sys_call_table[__NR_exit_group] = my_exit_group;
+
 
 	/* Register tracer device */
 	if (misc_register(&tracer_dev)) {
@@ -185,16 +190,18 @@ static int ktracer_init(void)
 
 
 	/* Create entry in /proc */
-	if (!(proc_kt = create_proc_entry(PROC_FILE, PROC_MODE, NULL))) {
+	if (!(proc_kt = create_proc_read_entry(PROC_FILE, PROC_MODE, NULL,
+			tracer_read, NULL))) {
 		printk(LOG_LEVEL "Unable to create /proc entry\n");
 		goto ureg_dev;
 	}
-	proc_kt->proc_fops = &tr_proc_ops;
 	printk(LOG_LEVEL "Device 'tracer' initiated\n");
 
 	// FIXME: remove this test
+	 /*
 	for (i = 0; i < 40; i++)
 		add_process(i);
+	*/
 
 	return 0;
 

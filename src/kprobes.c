@@ -17,6 +17,7 @@ static void add_counter(int pid, int func_index, long quant)
 	struct proc_info *p_info;
 	struct hlist_node *i;
 
+	spin_lock(&hlocks[hash_min(pid, HASH_BITS(procs))]);
 	/* Search the bucket for the process info */
 	hash_for_each_possible(procs, p_info, i, hlh, pid) {
 		if (p_info->pid != pid)
@@ -24,6 +25,7 @@ static void add_counter(int pid, int func_index, long quant)
 		atomic64_add(quant, &p_info->results[func_index]);
 		break;
 	}
+	spin_unlock(&hlocks[hash_min(pid, HASH_BITS(procs))]);
 }
 
 /* Increase the number of hits for a specific function */
@@ -47,12 +49,16 @@ static void save_mm_info(long address, long size)
 	mm_data->size = size;
 
 	/* Find the process info and add the association */
+	spin_lock(&hlocks[hash_min(current->pid, HASH_BITS(procs))]);
 	hash_for_each_possible(procs, p_info, i, hlh, current->pid) {
 		if (p_info->pid != current->pid)
 			continue;
+		spin_lock(&p_info->llock);
 		list_add(&mm_data->lh, &p_info->mm);
+		spin_unlock(&p_info->llock);
 		break;
 	}
+	spin_unlock(&hlocks[hash_min(current->pid, HASH_BITS(procs))]);
 }
 
 /* Retrieve allocation information (address, size) for a process */
@@ -64,21 +70,27 @@ static int get_mm_info(long address, int pid, struct mem_data *res)
 	struct list_head *j, *tmp;
 
 	/* Get the process information, search the bucket */
+	spin_lock(&hlocks[hash_min(current->pid, HASH_BITS(procs))]);
 	hash_for_each_possible(procs, p_info, i, hlh, pid) {
 		if (p_info->pid != current->pid)
 			continue;
 
 		/* Search the appropriate association and remove it*/
+		spin_lock(&p_info->llock);
 		list_for_each_safe(j, tmp, &p_info->mm) {
 			mm_data = list_entry(j, struct mem_data, lh);
 			if (mm_data->address == address) {
 				*res = *mm_data;
 				list_del(j);
 				kfree(mm_data);
+				spin_unlock(&p_info->llock);
+				spin_unlock(&hlocks[hash_min(current->pid, HASH_BITS(procs))]);
 				return 0;
 			}
 		}
+		spin_unlock(&p_info->llock);
 	}
+	spin_unlock(&hlocks[hash_min(current->pid, HASH_BITS(procs))]);
 	return -EINVAL;
 }
 
@@ -88,7 +100,7 @@ static int kmalloc_eh(struct kretprobe_instance *ri, struct pt_regs *regs)
 	struct handler_data *h_data;
 
 	/* Add to hit count */
-	inc_counter(current->pid, KMALLOC_INDEX);
+	inc_counter(ri->task->pid, KMALLOC_INDEX);
 
 	/* Save the size to allocate */
 	h_data = (struct handler_data *)ri->data;
@@ -177,7 +189,7 @@ struct kretprobe *mem_probe = (struct kretprobe *){
 		},
 		.entry_handler	= kmalloc_eh,
 		.handler	= kmalloc_h,
-		.maxactive	= NR_CPUS,
+		.maxactive	= 20,
 		.data_size	= sizeof(struct handler_data)
 	},
 };

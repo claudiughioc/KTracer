@@ -39,7 +39,7 @@
 #define MUTEX_LCK_INDEX		7
 #define MUTEX_ULK_INDEX		8
 
-#define MY_HASH_BITS		8
+#define MY_HASH_BITS		16
 #define MY_HASH_SIZE		(1 << MY_HASH_BITS)
 
 #define PROC_FILE		"tracer"
